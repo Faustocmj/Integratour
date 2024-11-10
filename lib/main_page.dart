@@ -1,14 +1,17 @@
-import 'dart:io';
+import 'dart:io'; // Importação necessária para manipulação de arquivos.
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_generative_ai/google_generative_ai.dart'; // Importação da biblioteca para usar o Gemini AI
+
 import 'firebase_options.dart';
-import 'login_page.dart'; // Importando a tela de login
+import 'login_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(); // Inicializa o Firebase
+  await Firebase.initializeApp();
   runApp(const MaterialApp(home: MainPage()));
 }
 
@@ -24,8 +27,10 @@ class _MainPageState extends State<MainPage> {
   int childrenCount = 0, menCount = 0, womenCount = 0, alcoholAdultsCount = 0;
   String? result, validationMessage;
   int busCapacity = 0;
+  final User? user = FirebaseAuth.instance.currentUser;
 
   final firestore = FirebaseFirestore.instance;
+
   final List<Map<String, dynamic>> busSizes = [
     {'label': 'Pequeno (20 passageiros)', 'value': 'Pequeno', 'capacity': 20},
     {'label': 'Médio (30-50 passageiros)', 'value': 'Médio', 'capacity': 50},
@@ -52,7 +57,6 @@ class _MainPageState extends State<MainPage> {
             _buildCompletedSearchesTab(),
           ],
         ),
-        // Botão de voltar para a tela de login
         floatingActionButton: FloatingActionButton(
           onPressed: () {
             Navigator.pushReplacement(
@@ -77,28 +81,7 @@ class _MainPageState extends State<MainPage> {
             child: const Text('Importar Arquivo .txt'),
           ),
           const SizedBox(height: 20),
-          DropdownButtonFormField<String>(
-            decoration: const InputDecoration(
-              labelText: 'Tamanho do Ônibus',
-              border: OutlineInputBorder(),
-            ),
-            value: selectedBusSize,
-            onChanged: (newValue) {
-              if (newValue != null) {
-                setState(() {
-                  selectedBusSize = newValue;
-                  busCapacity = busSizes
-                      .firstWhere((bus) => bus['value'] == newValue)['capacity'];
-                });
-              }
-            },
-            items: busSizes.map<DropdownMenuItem<String>>((busSize) {
-              return DropdownMenuItem<String>(
-                value: busSize['value'] as String,
-                child: Text(busSize['label']),
-              );
-            }).toList(),
-          ),
+          _buildBusSizeDropdown(),
           const SizedBox(height: 20),
           _buildStepperField(
             'Quantidade de Crianças',
@@ -141,14 +124,54 @@ class _MainPageState extends State<MainPage> {
                 style: const TextStyle(fontSize: 16),
               ),
             ),
+          if (validationMessage != null)
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(
+                validationMessage!,
+                style: const TextStyle(color: Colors.red, fontSize: 16),
+              ),
+            ),
         ],
       ),
     );
   }
 
+  Widget _buildBusSizeDropdown() {
+    return DropdownButtonFormField<String>(
+      decoration: const InputDecoration(
+        labelText: 'Tamanho do Ônibus',
+        border: OutlineInputBorder(),
+      ),
+      value: selectedBusSize,
+      onChanged: (newValue) {
+        if (newValue != null) {
+          setState(() {
+            selectedBusSize = newValue;
+            busCapacity = busSizes
+                .firstWhere((bus) => bus['value'] == newValue)['capacity'];
+          });
+        }
+      },
+      items: busSizes.map<DropdownMenuItem<String>>((busSize) {
+        return DropdownMenuItem<String>(
+          value: busSize['value'] as String,
+          child: Text(busSize['label']),
+        );
+      }).toList(),
+    );
+  }
+
   Widget _buildCompletedSearchesTab() {
+    if (user == null) {
+      return const Center(child: Text('Usuário não autenticado.'));
+    }
+
     return StreamBuilder<QuerySnapshot>(
-      stream: firestore.collection('pesquisas').snapshots(),
+      stream: firestore
+          .collection('pesquisas')
+          .where('userId', isEqualTo: user!.uid)
+          .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -190,19 +213,74 @@ class _MainPageState extends State<MainPage> {
   }
 
   Future<void> _finalizeSearch() async {
-    final data = {
-      'busSize': selectedBusSize,
-      'children': childrenCount,
-      'men': menCount,
-      'women': womenCount,
-      'alcoholAdults': alcoholAdultsCount,
-      'result': 'Pesquisa finalizada e salva!',
-      'timestamp': FieldValue.serverTimestamp(),
-    };
-    await firestore.collection('pesquisas').add(data);
-    setState(() {
-      result = 'Pesquisa finalizada e salva!';
-    });
+    final geminiResponse = await _sendToGeminiAI();
+    if (geminiResponse != null) {
+      final data = {
+        'userId': user!.uid,
+        'busSize': selectedBusSize,
+        'children': childrenCount,
+        'men': menCount,
+        'women': womenCount,
+        'alcoholAdults': alcoholAdultsCount,
+        'result': geminiResponse,
+        'timestamp': FieldValue.serverTimestamp(),
+      };
+      await firestore.collection('pesquisas').add(data);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Pesquisa finalizada e salva!')),
+      );
+
+      setState(() {
+        result = geminiResponse;
+        validationMessage = null;
+      });
+    }
+  }
+
+  Future<String?> _sendToGeminiAI() async {
+    const apiKey = 'AIzaSyCuPxSLKzhD2KdrU44G4oII6z9k5PajeSk';  // Substitua com sua chave da API Gemini
+
+    final model = GenerativeModel(
+      model: 'gemini-1.5-flash-latest',
+      apiKey: apiKey,
+    );
+
+    final prompt = '''
+      Em uma viagem de onibus de 8 horas
+      Considerando que temos:
+      - $childrenCount crianças
+      - $menCount homens
+      - $womenCount mulheres
+      - $alcoholAdultsCount adultos que consomem álcool
+
+      Recomende as quantidades necessárias de:
+      - Lanches naturais
+      - Sucos
+      - Água
+      - Refrigerante
+      - Cerveja (apenas para adultos que consomem álcool)
+
+      Retorne somente os valores necessários para cada categoria, sem explicar nada e sem nenhuma observação, sempre neste formato:
+
+     - Lanches naturais: (coloque aqui a quantidade)
+      - Sucos (coloque aqui a quantidade)
+      - Água (coloque aqui a quantidade)
+      - Refrigerante (coloque aqui a quantidade)
+      - Cerveja (coloque aqui a quantidade)
+    ''';
+
+    final content = [Content.text(prompt)];
+    final response = await model.generateContent(content);
+
+    if (response.text?.isNotEmpty ?? false) {
+      return response.text?.trim(); // Trim só é chamado se o texto não for nulo.
+    } else {
+      setState(() {
+        validationMessage = 'Erro ao obter resposta do Gemini.';
+      });
+      return null;
+    }
   }
 
   Future<void> _importFromTxt() async {
@@ -214,14 +292,21 @@ class _MainPageState extends State<MainPage> {
       final file = File(result.files.single.path!);
       final content = await file.readAsString();
       final lines = content.split('\n');
-      if (lines.length >= 4) {
+
+      if (lines.length < 4) {
         setState(() {
-          childrenCount = int.parse(lines[0]);
-          menCount = int.parse(lines[1]);
-          womenCount = int.parse(lines[2]);
-          alcoholAdultsCount = int.parse(lines[3]);
+          validationMessage = 'Arquivo deve conter 4 linhas.';
         });
+        return;
       }
+
+      setState(() {
+        childrenCount = int.parse(lines[0]);
+        menCount = int.parse(lines[1]);
+        womenCount = int.parse(lines[2]);
+        alcoholAdultsCount = int.parse(lines[3]);
+        validationMessage = null;
+      });
     }
   }
 
