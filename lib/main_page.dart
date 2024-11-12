@@ -252,7 +252,7 @@ class _MainPageState extends State<MainPage> {
 
   Future<String?> _sendToGeminiAI() async {
     const apiKey =
-        'AIzaSyCuPxSLKzhD2KdrU44G4oII6z9k5PajeSk';
+        '';
 
     final model = GenerativeModel(
       model: 'gemini-1.5-flash-latest',
