@@ -11,13 +11,11 @@ class RegisterPage extends StatefulWidget {
 class _RegisterPageState extends State<RegisterPage> {
   final _auth = FirebaseAuth.instance;
 
-  // Controladores para capturar os campos de texto
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
 
-  // Função para registrar o usuário
   Future<void> _register() async {
     if (_passwordController.text != _confirmPasswordController.text) {
       _showError('As senhas não coincidem.');

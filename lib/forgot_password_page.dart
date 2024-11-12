@@ -10,9 +10,8 @@ class ForgotPasswordPage extends StatefulWidget {
 
 class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   final TextEditingController _emailController = TextEditingController();
-  String _errorMessage = ''; // Para exibir mensagens de erro
+  String _errorMessage = ''; 
 
-  // Função para enviar o email de recuperação de senha
   Future<void> _sendPasswordResetEmail() async {
     String email = _emailController.text.trim();
 
@@ -25,17 +24,14 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
 
     try {
       await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
-      // Mostrar um diálogo de sucesso
       _showSuccessDialog();
     } on FirebaseAuthException catch (e) {
       setState(() {
-        // Exibe mensagem de erro em caso de falha
         _errorMessage = e.message ?? 'Erro desconhecido.';
       });
     }
   }
 
-  // Função para mostrar um diálogo de sucesso
   void _showSuccessDialog() {
     showDialog(
       context: context,
@@ -49,7 +45,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
             TextButton(
               onPressed: () {
                 Navigator.pop(context);
-                Navigator.pop(context); // Voltar para a tela de login
+                Navigator.pop(context); 
               },
               child: const Text('OK'),
             ),
@@ -71,7 +67,6 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              // Campo de Email
               TextField(
                 controller: _emailController,
                 decoration: const InputDecoration(
@@ -81,20 +76,17 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                 keyboardType: TextInputType.emailAddress,
               ),
               const SizedBox(height: 20),
-              // Mensagem de erro
               if (_errorMessage.isNotEmpty)
                 Text(
                   _errorMessage,
                   style: const TextStyle(color: Colors.red),
                 ),
               const SizedBox(height: 20),
-              // Botão de Recuperar Senha
               ElevatedButton(
                 onPressed: _sendPasswordResetEmail,
                 child: const Text('Enviar Email de Recuperação'),
               ),
               const SizedBox(height: 10),
-              // Voltar para Login
               TextButton(
                 onPressed: () {
                   Navigator.pop(context); // Volta para a tela de login

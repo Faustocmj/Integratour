@@ -1,11 +1,9 @@
-import 'dart:io'; // Importação necessária para manipulação de arquivos.
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_generative_ai/google_generative_ai.dart'; // Importação da biblioteca para usar o Gemini AI
-
+import 'package:google_generative_ai/google_generative_ai.dart';
 import 'firebase_options.dart';
 import 'login_page.dart';
 
@@ -76,10 +74,6 @@ class _MainPageState extends State<MainPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ElevatedButton(
-            onPressed: _importFromTxt,
-            child: const Text('Importar Arquivo .txt'),
-          ),
           const SizedBox(height: 20),
           _buildBusSizeDropdown(),
           const SizedBox(height: 20),
@@ -109,12 +103,13 @@ class _MainPageState extends State<MainPage> {
           const SizedBox(height: 20),
           ElevatedButton(
             onPressed: () {
-              if (_validateInputs()) {
+              if (_validateInputs() && _validateAlcohol()) {
                 _finalizeSearch();
               }
             },
             child: const Text('Calcular e Finalizar'),
           ),
+
           const SizedBox(height: 20),
           if (result != null)
             Padding(
@@ -187,11 +182,28 @@ class _MainPageState extends State<MainPage> {
               subtitle: Text(
                 'Crianças: ${data['children']}, Homens: ${data['men']}, Mulheres: ${data['women']}, Adultos com Álcool: ${data['alcoholAdults']}\nResultado: ${data['result']}',
               ),
+              trailing: IconButton(
+                icon: const Icon(Icons.delete, color: Colors.red),
+                onPressed: () => _deleteSearch(doc.id),
+              ),
             );
           }).toList(),
         );
       },
     );
+  }
+
+  Future<void> _deleteSearch(String docId) async {
+    try {
+      await firestore.collection('pesquisas').doc(docId).delete();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pesquisa excluída com sucesso!')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao excluir pesquisa: $e')),
+      );
+    }
   }
 
   Widget _buildStepperField(String label, int value, Function(int) onChanged) {
@@ -239,7 +251,8 @@ class _MainPageState extends State<MainPage> {
   }
 
   Future<String?> _sendToGeminiAI() async {
-    const apiKey = 'AIzaSyCuPxSLKzhD2KdrU44G4oII6z9k5PajeSk';  // Substitua com sua chave da API Gemini
+    const apiKey =
+        'AIzaSyCuPxSLKzhD2KdrU44G4oII6z9k5PajeSk';
 
     final model = GenerativeModel(
       model: 'gemini-1.5-flash-latest',
@@ -247,34 +260,41 @@ class _MainPageState extends State<MainPage> {
     );
 
     final prompt = '''
-      Em uma viagem de onibus de 8 horas
-      Considerando que temos:
-      - $childrenCount crianças
-      - $menCount homens
-      - $womenCount mulheres
-      - $alcoholAdultsCount adultos que consomem álcool
+      Em uma viagem de ônibus de 8 horas, precisamos calcular a quantidade necessária de alimentos e bebidas para um grupo de passageiros com as seguintes características:
+      - $childrenCount criança e adolescente (até 17 anos)
+      - $menCount número de homens adultos.
+      - $womenCount número de mulheres adultas.
+      - $alcoholAdultsCount número de adultos que consomem álcool (só os adultos bebem álcool).
+      Com base nas informações acima, recomende as quantidades necessárias de:
+      - Lanches naturais
+      - Sucos
+      - Água
+      - Refrigerante
+      - Cerveja (somente para os adultos que consomem álcool)
 
-      Recomende as quantidades necessárias de:
-      - Lanches naturais
-      - Sucos
-      - Água
-      - Refrigerante
-      - Cerveja (apenas para adultos que consomem álcool)
+      As quantidades recomendadas devem ser fornecidas de acordo com os seguintes critérios:
 
-      Retorne somente os valores necessários para cada categoria, sem explicar nada e sem nenhuma observação, sempre neste formato:
+      - Lanches naturais: quantidade suficiente para alimentar todos, considerando as necessidades médias para cada tipo de passageiro (crianças, homens, mulheres, e adultos com álcool).
+      - Sucos: quantidade adequada para todos os passageiros, levando em consideração a faixa etária e preferências gerais de consumo.
+      - Água: quantidade suficiente para manter todos hidratados durante a viagem de 8 horas, considerando as necessidades médias diárias de hidratação.
+      - Refrigerante: quantidade suficiente para atender às necessidades médias de consumo de refrigerante dos passageiros adultos, considerando a proporção de homens e mulheres.
+      - Cerveja: quantidade recomendada apenas para os adultos que consomem álcool, com base na quantidade média consumida por adulto em viagens longas.
 
-     - Lanches naturais: (coloque aqui a quantidade)
-      - Sucos (coloque aqui a quantidade)
-      - Água (coloque aqui a quantidade)
-      - Refrigerante (coloque aqui a quantidade)
-      - Cerveja (coloque aqui a quantidade)
+      Por favor, forneça as quantidades para cada item na seguinte estrutura, sem explicações ou observações adicionais:
+
+      - Lanches naturais: (coloque aqui a quantidade)
+      - Sucos: (coloque aqui a quantidade)
+      - Água: (coloque aqui a quantidade)
+      - Refrigerante: (coloque aqui a quantidade)
+      - Cerveja: (coloque aqui a quantidade)
     ''';
 
     final content = [Content.text(prompt)];
     final response = await model.generateContent(content);
 
     if (response.text?.isNotEmpty ?? false) {
-      return response.text?.trim(); // Trim só é chamado se o texto não for nulo.
+      return response.text
+          ?.trim();
     } else {
       setState(() {
         validationMessage = 'Erro ao obter resposta do Gemini.';
@@ -283,38 +303,23 @@ class _MainPageState extends State<MainPage> {
     }
   }
 
-  Future<void> _importFromTxt() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['txt'],
-    );
-    if (result != null) {
-      final file = File(result.files.single.path!);
-      final content = await file.readAsString();
-      final lines = content.split('\n');
-
-      if (lines.length < 4) {
-        setState(() {
-          validationMessage = 'Arquivo deve conter 4 linhas.';
-        });
-        return;
-      }
-
-      setState(() {
-        childrenCount = int.parse(lines[0]);
-        menCount = int.parse(lines[1]);
-        womenCount = int.parse(lines[2]);
-        alcoholAdultsCount = int.parse(lines[3]);
-        validationMessage = null;
-      });
-    }
-  }
-
   bool _validateInputs() {
     final totalPassengers = childrenCount + menCount + womenCount;
     if (totalPassengers > busCapacity) {
       setState(() {
-        validationMessage = 'Total de passageiros excede a capacidade do ônibus.';
+        validationMessage =
+            'Total de passageiros excede a capacidade do ônibus.';
+      });
+      return false;
+    }
+    return true;
+  }
+
+  bool _validateAlcohol() {
+    final totalAdults = menCount + womenCount;
+    if (alcoholAdultsCount > 0 && alcoholAdultsCount > totalAdults) {
+      setState(() {
+        validationMessage = 'Quantidade de adultos necessita ser maior que a quantidade de consumidores de alcool';
       });
       return false;
     }

@@ -64,7 +64,6 @@ class _LoginPageState extends State<LoginPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              // Campo de Email
               TextField(
                 controller: _emailController,
                 decoration: const InputDecoration(
@@ -74,7 +73,6 @@ class _LoginPageState extends State<LoginPage> {
                 keyboardType: TextInputType.emailAddress,
               ),
               const SizedBox(height: 20),
-              // Campo de Senha
               TextField(
                 controller: _passwordController,
                 obscureText: true,
@@ -84,7 +82,6 @@ class _LoginPageState extends State<LoginPage> {
                 ),
               ),
               const SizedBox(height: 10),
-              // Botão de Recuperar Senha
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
@@ -98,13 +95,11 @@ class _LoginPageState extends State<LoginPage> {
                 ),
               ),
               const SizedBox(height: 20),
-              // Botão de Login
               ElevatedButton(
                 onPressed: _login,
                 child: const Text('Login'),
               ),
               const SizedBox(height: 10),
-              // Botão de Cadastro
               TextButton(
                 onPressed: () {
                   Navigator.push(

@@ -19,8 +19,8 @@ class IntegratourApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: const LoginPage(), // Tela inicial de login
-      debugShowCheckedModeBanner: false, // Remove banner de debug
+      home: const LoginPage(), 
+      debugShowCheckedModeBanner: false, 
     );
   }
 }
